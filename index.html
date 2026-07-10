@@ -8,67 +8,79 @@
 </head>
 <body>
 
-<!-- Header -->
 <header>
-  <h1>📚 唸書計時器</h1>
-  <span id="user-badge" onclick="changeName()">👤 載入中...</span>
+  <div class="logo">
+    <div class="logo-icon">📚</div>
+    <span class="logo-text">唸書計時器</span>
+  </div>
+  <span id="user-badge" onclick="changeName()">👤 載入中</span>
 </header>
 
-<!-- Tabs -->
 <div class="tabs">
-  <button class="tab-btn active" onclick="showPage('timer')">⏱ 計時</button>
-  <button class="tab-btn" onclick="showPage('report')">📊 報表</button>
-  <button class="tab-btn" onclick="showPage('subjects')">📝 科目</button>
+  <button class="tab-btn active" onclick="showPage('timer', this)">⏱ 計時</button>
+  <button class="tab-btn" onclick="showPage('report', this)">📊 報表</button>
+  <button class="tab-btn" onclick="showPage('subjects', this)">📝 科目</button>
 </div>
 
-<!-- Page: Timer -->
+<!-- Timer Page -->
 <div id="page-timer" class="page active">
-  <div class="card">
+  <div class="timer-card">
     <div class="subject-row">
       <select id="subject-select">
         <option value="">── 選擇科目 ──</option>
       </select>
     </div>
 
-    <div class="timer-display">
-      <div class="time" id="timer-display">00:00:00</div>
-      <div class="subject-label" id="timer-subject-label">請先選擇科目</div>
+    <div class="circle-timer" id="circle-timer">
+      <svg viewBox="0 0 200 200">
+        <defs>
+          <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#a78bfa"/>
+            <stop offset="100%" style="stop-color:#7c3aed"/>
+          </linearGradient>
+        </defs>
+        <circle class="circle-bg" cx="100" cy="100" r="90"/>
+        <circle class="circle-progress" id="circle-progress" cx="100" cy="100" r="90"/>
+      </svg>
+      <div class="circle-inner">
+        <div class="time-display" id="timer-display">00:00:00</div>
+        <div class="subject-label" id="timer-subject-label">選擇科目開始</div>
+      </div>
     </div>
 
-    <button class="timer-btn start" id="main-btn" onclick="toggleTimer()">▶ 開始唸書</button>
+    <button class="timer-btn start" id="main-btn" onclick="toggleTimer()">▶&nbsp; 開始唸書</button>
   </div>
 
-  <div class="card">
-    <h3 style="margin-bottom:14px; font-size:0.95rem; color:#8a93a6;">今日記錄</h3>
+  <p class="section-title">今日記錄</p>
+  <div class="today-card">
     <ul class="today-list" id="today-list">
       <li class="empty-msg">今天還沒有記錄</li>
     </ul>
   </div>
 </div>
 
-<!-- Page: Report -->
+<!-- Report Page -->
 <div id="page-report" class="page">
-  <div class="card">
-    <div class="report-tabs">
-      <button class="report-tab active" onclick="switchReport('day', this)">每日</button>
-      <button class="report-tab" onclick="switchReport('week', this)">本週</button>
-      <button class="report-tab" onclick="switchReport('month', this)">本月</button>
-    </div>
-    <div id="report-content">
-      <p class="loading-msg">載入中...</p>
-    </div>
+  <div class="report-tabs">
+    <button class="report-tab active" onclick="switchReport('day', this)">每日</button>
+    <button class="report-tab" onclick="switchReport('week', this)">本週</button>
+    <button class="report-tab" onclick="switchReport('month', this)">本月</button>
+  </div>
+  <div class="report-card">
+    <div id="report-content"><p class="loading-msg">載入中...</p></div>
   </div>
 </div>
 
-<!-- Page: Subjects -->
+<!-- Subjects Page -->
 <div id="page-subjects" class="page">
-  <div class="card">
-    <h3 style="margin-bottom:16px;">科目管理</h3>
-    <div class="subject-tag-list" id="subject-tag-list">
+  <div class="subjects-card">
+    <p class="section-title" style="margin-bottom:14px">科目管理</p>
+    <div class="subject-chips" id="subject-chips">
       <p class="loading-msg">載入中...</p>
     </div>
-    <div class="add-subject-row">
-      <input type="text" id="new-subject-input" placeholder="輸入新科目名稱" onkeydown="if(event.key==='Enter') addSubject()">
+    <div class="add-row">
+      <input type="text" id="new-subject-input" placeholder="新增科目名稱"
+             onkeydown="if(event.key==='Enter') addSubject()">
       <button class="btn-add" onclick="addSubject()">新增</button>
     </div>
   </div>
@@ -77,14 +89,14 @@
 <!-- Name Modal -->
 <div class="modal-overlay" id="name-modal">
   <div class="modal">
-    <h2>👋 你好！</h2>
-    <p>請輸入你的名字，讓我們記錄你的唸書時間</p>
-    <input type="text" id="name-input" placeholder="例如：小明" onkeydown="if(event.key==='Enter') saveName()">
+    <h2>👋 嗨！</h2>
+    <p>輸入你的名字<br>讓我們開始記錄你的學習時間</p>
+    <input type="text" id="name-input" placeholder="你的名字"
+           onkeydown="if(event.key==='Enter') saveName()">
     <button class="btn-confirm" onclick="saveName()">開始使用</button>
   </div>
 </div>
 
-<!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <script src="config.js"></script>

@@ -62,13 +62,13 @@ function getUserName() {
 }
 
 // ── Pages & Tabs ────────────────────────────────
-function showPage(name) {
+function showPage(name, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
+  btn.classList.add('active');
   if (name === 'report') loadReport(currentReportType);
-  if (name === 'subjects') renderSubjectTags();
+  if (name === 'subjects') renderSubjectChips();
 }
 
 // ── Timer ────────────────────────────────────────
@@ -82,10 +82,11 @@ function startTimer() {
   currentSubject = select.value;
   startTime = new Date();
   isRunning = true;
-  document.getElementById('timer-subject-label').textContent = '正在唸：' + currentSubject;
-  document.getElementById('main-btn').textContent = '⏹ 停止';
+  document.getElementById('timer-subject-label').textContent = currentSubject;
+  document.getElementById('main-btn').innerHTML = '⏹&nbsp; 停止';
   document.getElementById('main-btn').className = 'timer-btn stop';
   document.getElementById('subject-select').disabled = true;
+  document.getElementById('circle-timer').classList.add('running');
   timerInterval = setInterval(updateTimerDisplay, 1000);
 }
 
@@ -101,10 +102,12 @@ async function stopTimer() {
     await saveRecord(currentSubject, startTime, endTime, durationMin);
   }
   document.getElementById('timer-display').textContent = '00:00:00';
-  document.getElementById('timer-subject-label').textContent = '請先選擇科目';
-  document.getElementById('main-btn').textContent = '▶ 開始唸書';
+  document.getElementById('timer-subject-label').textContent = '選擇科目開始';
+  document.getElementById('main-btn').innerHTML = '▶&nbsp; 開始唸書';
   document.getElementById('main-btn').className = 'timer-btn start';
   document.getElementById('subject-select').disabled = false;
+  document.getElementById('circle-timer').classList.remove('running');
+  document.getElementById('circle-progress').style.strokeDashoffset = 565;
   startTime = null;
   currentSubject = '';
 }
@@ -116,6 +119,11 @@ function updateTimerDisplay() {
   const s = elapsed % 60;
   document.getElementById('timer-display').textContent =
     String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  // Progress ring: 1 full rotation = 60 min
+  const circumference = 565;
+  const progress = Math.min((elapsed % 3600) / 3600, 1);
+  const offset = circumference * (1 - progress);
+  document.getElementById('circle-progress').style.strokeDashoffset = offset;
 }
 
 // ── Subjects ─────────────────────────────────────
@@ -142,18 +150,21 @@ function renderSubjectSelect() {
   if (prev) sel.value = prev;
 }
 
-function renderSubjectTags() {
-  const list = document.getElementById('subject-tag-list');
+function renderSubjectTags() { renderSubjectChips(); }
+
+function renderSubjectChips() {
+  const el = document.getElementById('subject-chips');
+  if (!el) return;
   if (subjects.length === 0) {
-    list.innerHTML = '<p class="empty-msg">還沒有科目，請新增</p>';
+    el.innerHTML = '<p class="empty-msg">還沒有科目，請新增</p>';
     return;
   }
-  list.innerHTML = '';
+  el.innerHTML = '';
   subjects.forEach((s, i) => {
-    const tag = document.createElement('div');
-    tag.className = 'subject-tag';
-    tag.innerHTML = `<span>${s}</span><button class="delete-btn" onclick="deleteSubject(${i})">✕</button>`;
-    list.appendChild(tag);
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML = `<span>${s}</span><button class="chip-del" onclick="deleteSubject(${i})">✕</button>`;
+    el.appendChild(chip);
   });
 }
 
@@ -224,10 +235,16 @@ async function loadTodayRecords() {
     list.innerHTML = '<li class="empty-msg">今天還沒有記錄</li>';
     return;
   }
+  const colors = ['#a78bfa','#34d399','#fbbf24','#f87171','#60a5fa','#f472b6','#4ade80'];
   list.innerHTML = '';
-  Object.entries(bySubject).sort((a,b) => b[1]-a[1]).forEach(([subj, mins]) => {
+  Object.entries(bySubject).sort((a,b) => b[1]-a[1]).forEach(([subj, mins], i) => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="subject-name">${subj}</span><span class="duration">${formatDuration(mins)}</span>`;
+    li.innerHTML = `
+      <span class="subj-left">
+        <span class="subj-dot" style="background:${colors[i % colors.length]}"></span>
+        <span class="subj-name">${subj}</span>
+      </span>
+      <span class="subj-duration">${formatDuration(mins)}</span>`;
     list.appendChild(li);
   });
 }
