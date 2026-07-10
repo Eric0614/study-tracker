@@ -147,18 +147,19 @@ header {
 
 .circle-bg {
   fill: none;
-  stroke: var(--surface2);
-  stroke-width: 8;
+  stroke: #334155;
+  stroke-width: 10;
 }
 
 .circle-progress {
   fill: none;
-  stroke: url(#timerGradient);
-  stroke-width: 8;
+  stroke: #a78bfa;
+  stroke-width: 10;
   stroke-linecap: round;
   stroke-dasharray: 565;
   stroke-dashoffset: 565;
   transition: stroke-dashoffset 1s linear;
+  filter: drop-shadow(0 0 6px rgba(167,139,250,0.6));
 }
 
 .circle-inner {
