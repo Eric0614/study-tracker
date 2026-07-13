@@ -328,8 +328,11 @@ function formatDuration(mins) {
 }
 function parseDate(str) {
   if (!str) return new Date(0);
-  const p = String(str).split('-');
-  return new Date(p[0], p[1]-1, p[2]);
+  const s = String(str).trim();
+  // YYYY-MM-DD
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+  return new Date(s);
 }
 function getWeekStart(d) {
   const day = d.getDay();
