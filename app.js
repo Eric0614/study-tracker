@@ -15,11 +15,11 @@ async function apiGet(params) {
   return resp.json();
 }
 
-async function apiPost(data) {
-  const resp = await fetch(CONFIG.SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+async function apiPost(action, paramKey, data) {
+  const url = new URL(CONFIG.SCRIPT_URL);
+  url.searchParams.set('action', action);
+  url.searchParams.set(paramKey, JSON.stringify(data));
+  const resp = await fetch(url.toString());
   return resp.json();
 }
 
@@ -175,7 +175,7 @@ async function addSubject() {
   if (subjects.includes(name)) { showToast('科目已存在'); return; }
   subjects.push(name);
   input.value = '';
-  await apiPost({ action: 'saveSubjects', subjects });
+  await apiPost('saveSubjects', 'subjects', subjects);
   renderSubjectSelect();
   renderSubjectTags();
   showToast('✅ 已新增：' + name);
@@ -185,7 +185,7 @@ async function deleteSubject(index) {
   if (!confirm(`確定要刪除「${subjects[index]}」嗎？`)) return;
   const name = subjects[index];
   subjects.splice(index, 1);
-  await apiPost({ action: 'saveSubjects', subjects });
+  await apiPost('saveSubjects', 'subjects', subjects);
   renderSubjectSelect();
   renderSubjectTags();
   showToast('已刪除：' + name);
@@ -195,8 +195,7 @@ async function deleteSubject(index) {
 async function saveRecord(subject, start, end, durationMin) {
   showToast('儲存中...');
   try {
-    await apiPost({
-      action: 'addRecord',
+    await apiPost('addRecord', 'data', {
       user: getUserName(),
       subject,
       start: formatDateTime(start),
