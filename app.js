@@ -19,11 +19,13 @@ async function apiWrite(action, paramKey, data) {
   const body = new URLSearchParams();
   body.append('action', action);
   body.append(paramKey, JSON.stringify(data));
-  await fetch(CONFIG.SCRIPT_URL, {
+  const resp = await fetch(CONFIG.SCRIPT_URL, {
     method: 'POST',
-    mode: 'no-cors',
     body: body,
   });
+  const result = await resp.json();
+  if (!result.ok) throw new Error(result.error || '寫入失敗');
+  return result;
 }
 
 // ── Init ────────────────────────────────────────
@@ -201,8 +203,8 @@ async function saveRecord(subject, start, end, durationMin) {
     await apiWrite('addRecord', 'data', {
       user: getUserName(),
       subject,
-      start: formatDateTime(start),
-      end: formatDateTime(end),
+      start: formatTime(start),
+      end: formatTime(end),
       duration: durationMin,
       date: formatDate(start),
     });
@@ -321,8 +323,8 @@ function renderReportTable(records, groupMode) {
 function formatDate(d) {
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-function formatDateTime(d) {
-  return formatDate(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+function formatTime(d) {
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
 function formatDuration(mins) {
   if (mins < 60) return mins + ' 分';
