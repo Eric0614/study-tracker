@@ -6,6 +6,9 @@ let currentSubject = '';
 let currentReportType = 'day';
 let subjects = [];
 let allRecords = [];
+let weeklyGoalMinutes = null;   // null = 尚未設定（或尚未載入）
+let weeklyGoalLoaded = false;   // 是否已完成第一次向後端取值
+let weekActualMinutes = 0;      // 本週累積分鐘，與週報表使用同一份資料計算
 
 // ── API ─────────────────────────────────────────
 async function apiGet(params) {
@@ -47,14 +50,18 @@ function checkUserName() {
   }
 }
 
-function saveName() {
+async function saveName() {
   const name = document.getElementById('name-input').value.trim();
   if (!name) { showToast('請輸入名字'); return; }
   localStorage.setItem('study_user_name', name);
   document.getElementById('name-modal').style.display = 'none';
   document.getElementById('user-badge').textContent = '👤 ' + name;
-  loadSubjects();
-  loadTodayRecords();
+  await loadSubjects();
+  await loadTodayRecords();
+  // 換了使用者，週目標要重新以新使用者身分載入；等 allRecords 換成新使用者的資料後才計算，避免進度條短暫顯示舊使用者的數字
+  weeklyGoalLoaded = false;
+  weeklyGoalMinutes = null;
+  await loadWeeklyGoal();
 }
 
 function changeName() {
@@ -143,6 +150,8 @@ async function loadSubjects() {
   renderSubjectTags();
 }
 
+function renderSubjectTags() { renderSubjectChips(); }
+
 function renderSubjectSelect() {
   const sel = document.getElementById('subject-select');
   const prev = sel.value;
@@ -154,8 +163,6 @@ function renderSubjectSelect() {
   });
   if (prev) sel.value = prev;
 }
-
-function renderSubjectTags() { renderSubjectChips(); }
 
 function renderSubjectChips() {
   const el = document.getElementById('subject-chips');
@@ -259,6 +266,7 @@ function switchReport(type, btn) {
   currentReportType = type;
   document.querySelectorAll('.report-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  document.getElementById('goal-card').style.display = (type === 'week') ? 'block' : 'none';
   loadReport(type);
 }
 
@@ -278,11 +286,128 @@ async function loadReport(type) {
     const weekStart = getWeekStart(now);
     filtered = allRecords.filter(r => { const d = parseDate(r.date); return d >= weekStart && d <= now; });
     renderReportTable(filtered, 'week');
+    // 週目標卡片必須沿用同一份 filtered 資料/同一個週起訖定義，避免跟下方報表數字對不上
+    await loadWeeklyGoal();
   } else {
     const monthStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
     filtered = allRecords.filter(r => r.date && String(r.date).startsWith(monthStr));
     renderReportTable(filtered, 'month');
   }
+}
+
+// ── Weekly Goal ──────────────────────────────────
+async function loadWeeklyGoal() {
+  try {
+    const data = await apiGet({ action: 'getWeeklyGoal', user: getUserName() });
+    weeklyGoalMinutes = (data.goalMinutes === undefined) ? null : data.goalMinutes;
+  } catch (e) {
+    weeklyGoalMinutes = null;
+    console.error(e);
+  }
+  weeklyGoalLoaded = true;
+  renderGoalCard();
+}
+
+function computeWeekActualMinutes() {
+  // 沿用 loadReport 對「本週」的同一套篩選邏輯（getWeekStart + allRecords），避免另外重算導致數字對不上
+  const now = new Date();
+  const weekStart = getWeekStart(now);
+  const weekRecords = allRecords.filter(r => { const d = parseDate(r.date); return d >= weekStart && d <= now; });
+  return weekRecords.reduce((sum, r) => sum + r.duration, 0);
+}
+
+function renderGoalCard() {
+  const el = document.getElementById('goal-content');
+  if (!el) return;
+
+  if (!weeklyGoalLoaded) {
+    el.innerHTML = '<p class="loading-msg">載入中...</p>';
+    return;
+  }
+
+  weekActualMinutes = computeWeekActualMinutes();
+
+  if (weeklyGoalMinutes === null) {
+    el.innerHTML = `
+      <p class="goal-title">🎯 設定本週目標時數</p>
+      <div class="goal-form-row">
+        <input type="number" id="goal-hours-input" placeholder="例如 10" min="0" step="0.5"
+               oninput="validateGoalInput()"
+               onkeydown="if(event.key==='Enter' && !document.getElementById('goal-save-btn').disabled) handleSaveWeeklyGoal()">
+        <button class="btn-add" id="goal-save-btn" onclick="handleSaveWeeklyGoal()" disabled>儲存</button>
+      </div>
+      <p class="goal-hint" id="goal-hint"></p>
+    `;
+  } else {
+    const actualHours = weekActualMinutes / 60;
+    const goalHours = weeklyGoalMinutes / 60;
+    const pct = goalHours > 0 ? (weekActualMinutes / weeklyGoalMinutes * 100) : 0;
+    const pctCapped = Math.min(Math.max(pct, 0), 100);
+    el.innerHTML = `
+      <div class="goal-header">
+        <p class="goal-title">🎯 本週目標</p>
+        <button class="goal-edit-link" onclick="showGoalForm()">重新設定</button>
+      </div>
+      <div class="goal-progress-track">
+        <div class="goal-progress-fill" style="width:${pctCapped}%"></div>
+      </div>
+      <p class="goal-progress-text${pct > 100 ? ' over' : ''}">已唸 ${formatHours(actualHours)} 小時 / 目標 ${formatHours(goalHours)} 小時</p>
+    `;
+  }
+}
+
+function validateGoalInput() {
+  const input = document.getElementById('goal-hours-input');
+  const btn = document.getElementById('goal-save-btn');
+  const hint = document.getElementById('goal-hint');
+  if (!input || !btn || !hint) return;
+  const val = parseFloat(input.value);
+  if (input.value === '' ) {
+    btn.disabled = true;
+    hint.textContent = '';
+  } else if (isNaN(val) || val <= 0) {
+    btn.disabled = true;
+    hint.textContent = '目標時數需大於 0';
+  } else if (val > 168) {
+    btn.disabled = true;
+    hint.textContent = '目標時數不能超過 168 小時（一週上限）';
+  } else {
+    btn.disabled = false;
+    hint.textContent = '';
+  }
+}
+
+async function handleSaveWeeklyGoal() {
+  const input = document.getElementById('goal-hours-input');
+  const hours = parseFloat(input.value);
+  if (!hours || hours <= 0) { showToast('目標時數需大於 0'); return; }
+  if (hours > 168) { showToast('目標時數不能超過 168 小時（一週上限）'); return; }
+
+  const btn = document.getElementById('goal-save-btn');
+  btn.disabled = true;
+  try {
+    const result = await apiWrite('saveWeeklyGoal', 'data', {
+      user: getUserName(),
+      goalMinutes: Math.round(hours * 60),
+    });
+    weeklyGoalMinutes = result.goalMinutes;
+    showToast('✅ 已設定本週目標');
+    renderGoalCard();
+  } catch (e) {
+    showToast('❌ ' + (e.message || '設定失敗，請重試'));
+    console.error(e);
+    btn.disabled = false;
+  }
+}
+
+function showGoalForm() {
+  weeklyGoalMinutes = null;
+  renderGoalCard();
+}
+
+function formatHours(h) {
+  const rounded = Math.round(h * 10) / 10;
+  return (rounded % 1 === 0) ? String(rounded) : rounded.toFixed(1);
 }
 
 function renderReportTable(records, groupMode) {

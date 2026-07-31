@@ -18,6 +18,17 @@ var RECORD_HEADERS = [
   '日期'
 ];
 
+/*
+ * 每週目標時數（分鐘）上限：7 天 * 24 小時 * 60 分鐘。
+ */
+var WEEKLY_GOAL_MAX_MINUTES = 10080;
+
+/*
+ * PropertiesService key 前綴，實際 key 為
+ * WEEKLY_GOAL_PROPERTY_PREFIX + 正規化後的使用者名稱。
+ */
+var WEEKLY_GOAL_PROPERTY_PREFIX = 'weeklyGoal_';
+
 /**
  * GET API
  *
@@ -26,6 +37,9 @@ var RECORD_HEADERS = [
  *
  * 讀取紀錄：
  * ?action=getRecords&user=Eric
+ *
+ * 讀取每週目標時數：
+ * ?action=getWeeklyGoal&user=Eric
  *
  * 為了相容舊前端，也支援：
  * ?action=addRecord&data={JSON}
@@ -45,6 +59,10 @@ function doGet(e) {
 
     if (action === 'getRecords') {
       return getRecords(params.user);
+    }
+
+    if (action === 'getWeeklyGoal') {
+      return getWeeklyGoal(params.user);
     }
 
     /*
@@ -86,6 +104,15 @@ function doGet(e) {
  *   "action": "saveSubjects",
  *   "subjects": ["國文", "英文", "數學"]
  * }
+ *
+ * 儲存每週目標時數：
+ * {
+ *   "action": "saveWeeklyGoal",
+ *   "data": {
+ *     "user": "Eric",
+ *     "goalMinutes": 600
+ *   }
+ * }
  */
 function doPost(e) {
   return executeRequest(function () {
@@ -101,6 +128,10 @@ function doPost(e) {
 
     if (action === 'saveSubjects') {
       return saveSubjects(request.subjects);
+    }
+
+    if (action === 'saveWeeklyGoal') {
+      return saveWeeklyGoal(request.data || request);
     }
 
     throw new Error('未知或缺少 action，收到：' + action);
@@ -480,6 +511,100 @@ function getRecords(user) {
 
   return {
     records: records
+  };
+}
+
+/**
+ * 讀取指定使用者的每週目標時數（分鐘）。
+ *
+ * 沒有設定過時回傳 goalMinutes: null。
+ */
+function getWeeklyGoal(user) {
+  var targetUser = normalizeText(user);
+
+  if (!targetUser) {
+    throw new Error('缺少 user 參數');
+  }
+
+  var key = WEEKLY_GOAL_PROPERTY_PREFIX + targetUser;
+  var value = PropertiesService
+    .getScriptProperties()
+    .getProperty(key);
+
+  if (value === null || value === undefined || value === '') {
+    return {
+      goalMinutes: null
+    };
+  }
+
+  var goalMinutes = Number(value);
+
+  if (!isFinite(goalMinutes)) {
+    return {
+      goalMinutes: null
+    };
+  }
+
+  return {
+    goalMinutes: goalMinutes
+  };
+}
+
+/**
+ * 儲存指定使用者的每週目標時數（分鐘）。
+ *
+ * goalMinutes 必須是正整數，且不能超過 WEEKLY_GOAL_MAX_MINUTES
+ * （7 天的分鐘數）。
+ */
+function saveWeeklyGoal(data) {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    Array.isArray(data)
+  ) {
+    throw new Error('data 必須是物件');
+  }
+
+  var user = normalizeText(data.user);
+  var goalMinutes = Number(data.goalMinutes);
+
+  if (!user) {
+    throw new Error('使用者名稱不能為空');
+  }
+
+  if (user.length > 100) {
+    throw new Error(
+      '使用者名稱不能超過 100 個字元'
+    );
+  }
+
+  if (
+    !isFinite(goalMinutes) ||
+    goalMinutes <= 0 ||
+    Math.floor(goalMinutes) !== goalMinutes
+  ) {
+    throw new Error(
+      '每週目標分鐘數必須是正整數，收到：' +
+      String(data.goalMinutes)
+    );
+  }
+
+  if (goalMinutes > WEEKLY_GOAL_MAX_MINUTES) {
+    throw new Error(
+      '每週目標分鐘數不能超過 ' +
+      WEEKLY_GOAL_MAX_MINUTES +
+      ' 分鐘（7 天）'
+    );
+  }
+
+  var key = WEEKLY_GOAL_PROPERTY_PREFIX + user;
+
+  PropertiesService
+    .getScriptProperties()
+    .setProperty(key, String(goalMinutes));
+
+  return {
+    goalMinutes: goalMinutes
   };
 }
 
