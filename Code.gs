@@ -170,6 +170,26 @@ function executeRequest(callback) {
 }
 
 /**
+ * 用 ScriptLock 包住一段需要序列化執行的邏輯，
+ * 統一處理上鎖／逾時／釋放，避免每個寫入函式各自重複這段樣板。
+ */
+function withLock(callback) {
+  var lock = LockService.getScriptLock();
+  var locked = false;
+
+  try {
+    lock.waitLock(10000);
+    locked = true;
+
+    return callback();
+  } finally {
+    if (locked) {
+      lock.releaseLock();
+    }
+  }
+}
+
+/**
  * 解析 POST 請求。
  *
  * 支援：
@@ -338,13 +358,7 @@ function saveSubjects(subjects) {
     throw new Error('科目數量不能超過 100 個');
   }
 
-  var lock = LockService.getScriptLock();
-  var locked = false;
-
-  try {
-    lock.waitLock(10000);
-    locked = true;
-
+  return withLock(function () {
     var spreadsheet = getSpreadsheet();
     var sheet = spreadsheet.getSheetByName(
       SUBJECT_SHEET_NAME
@@ -400,11 +414,7 @@ function saveSubjects(subjects) {
       subjects: cleanedSubjects,
       count: cleanedSubjects.length
     };
-  } finally {
-    if (locked) {
-      lock.releaseLock();
-    }
-  }
+  });
 }
 
 /**
@@ -412,13 +422,8 @@ function saveSubjects(subjects) {
  */
 function addRecord(data) {
   var record = validateRecord(data);
-  var lock = LockService.getScriptLock();
-  var locked = false;
 
-  try {
-    lock.waitLock(10000);
-    locked = true;
-
+  return withLock(function () {
     var spreadsheet = getSpreadsheet();
     var sheet = spreadsheet.getSheetByName(
       RECORD_SHEET_NAME
@@ -453,11 +458,7 @@ function addRecord(data) {
     return {
       record: record
     };
-  } finally {
-    if (locked) {
-      lock.releaseLock();
-    }
-  }
+  });
 }
 
 /**
@@ -599,13 +600,15 @@ function saveWeeklyGoal(data) {
 
   var key = WEEKLY_GOAL_PROPERTY_PREFIX + user;
 
-  PropertiesService
-    .getScriptProperties()
-    .setProperty(key, String(goalMinutes));
+  return withLock(function () {
+    PropertiesService
+      .getScriptProperties()
+      .setProperty(key, String(goalMinutes));
 
-  return {
-    goalMinutes: goalMinutes
-  };
+    return {
+      goalMinutes: goalMinutes
+    };
+  });
 }
 
 /**

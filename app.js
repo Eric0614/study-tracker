@@ -147,10 +147,8 @@ async function loadSubjects() {
     subjects = ['國文','英文','數學','自然','社會'];
   }
   renderSubjectSelect();
-  renderSubjectTags();
+  renderSubjectChips();
 }
-
-function renderSubjectTags() { renderSubjectChips(); }
 
 function renderSubjectSelect() {
   const sel = document.getElementById('subject-select');
@@ -189,7 +187,7 @@ async function addSubject() {
   input.value = '';
   await apiWrite('saveSubjects', 'subjects', subjects);
   renderSubjectSelect();
-  renderSubjectTags();
+  renderSubjectChips();
   showToast('✅ 已新增：' + name);
 }
 
@@ -199,7 +197,7 @@ async function deleteSubject(index) {
   subjects.splice(index, 1);
   await apiWrite('saveSubjects', 'subjects', subjects);
   renderSubjectSelect();
-  renderSubjectTags();
+  renderSubjectChips();
   showToast('已刪除：' + name);
 }
 
