@@ -848,9 +848,9 @@ function normalizeDate(value) {
 }
 
 /**
- * 格式化從試算表讀出的時間。
+ * 用指定的正規化函式格式化值，正規化失敗時退回純文字。
  */
-function formatTime(value) {
+function formatWithFallback(value, normalizeFn) {
   if (
     value === null ||
     value === undefined ||
@@ -859,7 +859,7 @@ function formatTime(value) {
     return '';
   }
 
-  var normalized = normalizeTime(value);
+  var normalized = normalizeFn(value);
 
   if (normalized) {
     return normalized;
@@ -869,24 +869,17 @@ function formatTime(value) {
 }
 
 /**
+ * 格式化從試算表讀出的時間。
+ */
+function formatTime(value) {
+  return formatWithFallback(value, normalizeTime);
+}
+
+/**
  * 格式化從試算表讀出的日期。
  */
 function formatDate(value) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ''
-  ) {
-    return '';
-  }
-
-  var normalized = normalizeDate(value);
-
-  if (normalized) {
-    return normalized;
-  }
-
-  return normalizeText(value);
+  return formatWithFallback(value, normalizeDate);
 }
 
 /**
