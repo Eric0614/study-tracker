@@ -398,12 +398,20 @@ async function loadReport(type) {
 }
 
 // ── Weekly Goal ──────────────────────────────────
+function weeklyGoalCacheKey() {
+  return 'study_weekly_goal_cache_' + getUserName();
+}
+
 async function loadWeeklyGoal() {
   try {
-    const data = await apiGet({ action: 'getWeeklyGoal', user: getUserName() });
+    const data = await apiGetWithRetry({ action: 'getWeeklyGoal', user: getUserName() });
     weeklyGoalMinutes = (data.goalMinutes === undefined) ? null : data.goalMinutes;
+    localStorage.setItem(weeklyGoalCacheKey(), JSON.stringify(weeklyGoalMinutes));
   } catch (e) {
-    weeklyGoalMinutes = null;
+    // 同一個間歇性 404 問題：連重試都失敗時，用快取而不是直接當成「還沒設定過」，
+    // 避免使用者誤以為週目標被清掉、重新設定一次造成跟原本的值搞混。
+    const cached = localStorage.getItem(weeklyGoalCacheKey());
+    weeklyGoalMinutes = cached !== null ? JSON.parse(cached) : null;
     console.error(e);
   }
   weeklyGoalLoaded = true;
