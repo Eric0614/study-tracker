@@ -301,7 +301,7 @@ async function deleteSubject(index) {
 async function saveRecord(subject, start, end, durationMin) {
   showToast('儲存中...');
   try {
-    await apiWriteWithRetry('addRecord', 'data', {
+    const result = await apiWriteWithRetry('addRecord', 'data', {
       user: getUserName(),
       subject,
       start: formatTime(start),
@@ -310,7 +310,18 @@ async function saveRecord(subject, start, end, durationMin) {
       date: formatDate(start),
     });
     showToast(`✅ 已記錄：${subject} ${durationMin} 分鐘`);
-    setTimeout(loadTodayRecords, 1500);
+    // 直接用後端回傳、已經確認寫入成功的那筆紀錄更新畫面，不要再另外發一次
+    // getRecords 去讀「我們剛剛才存進去的東西」——同一個 Apps Script exec
+    // 網址間歇性很慢（實測寫入本身可能要 9 秒、讀取甚至可能卡到 18 秒才失敗），
+    // 等一下再重讀反而更容易讓使用者以為「今日記錄」沒更新、跑去手動重新整理。
+    allRecords.push({
+      ...result.record,
+      duration: Number(result.record.duration) || 0,
+      date: String(result.record.date),
+    });
+    localStorage.setItem(recordsCacheKey(), JSON.stringify(allRecords));
+    renderTodayList();
+    updateTotalSummary();
   } catch (e) {
     showToast('❌ 儲存失敗，請重試');
     console.error(e);
@@ -349,6 +360,10 @@ function updateTotalSummary() {
 
 async function loadTodayRecords() {
   await loadAllRecords();
+  renderTodayList();
+}
+
+function renderTodayList() {
   const today = formatDate(new Date());
   const todayRecords = allRecords.filter(r => r.date === today);
   const list = document.getElementById('today-list');
