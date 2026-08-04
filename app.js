@@ -117,6 +117,13 @@ function toggleTimer() {
   if (isRunning) stopTimer(); else startTimer();
 }
 
+// 如果呼叫這個之前 timerInterval 已經指到一個還在跑的 interval，先清掉再蓋過去，
+// 避免舊的 interval 變成孤兒（變數被新的覆蓋掉、永遠沒人叫得動 clearInterval）。
+function startTickingInterval() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimerDisplay, 1000);
+}
+
 function startTimer() {
   const select = document.getElementById('subject-select');
   if (!select.value) { showToast('請先選擇科目'); return; }
@@ -128,7 +135,7 @@ function startTimer() {
   document.getElementById('main-btn').className = 'timer-btn stop';
   document.getElementById('subject-select').disabled = true;
   document.getElementById('circle-timer').classList.add('running');
-  timerInterval = setInterval(updateTimerDisplay, 1000);
+  startTickingInterval();
   localStorage.setItem(TIMER_STATE_KEY, JSON.stringify({ subject: currentSubject, startTime: startTime.toISOString() }));
 }
 
@@ -160,12 +167,13 @@ function restoreTimerState() {
   document.getElementById('main-btn').className = 'timer-btn stop';
   document.getElementById('circle-timer').classList.add('running');
   updateTimerDisplay();
-  timerInterval = setInterval(updateTimerDisplay, 1000);
+  startTickingInterval();
 }
 
 async function stopTimer() {
   if (!isRunning) return;
   clearInterval(timerInterval);
+  timerInterval = null;
   isRunning = false;
   localStorage.removeItem(TIMER_STATE_KEY);
   const endTime = new Date();
@@ -187,6 +195,12 @@ async function stopTimer() {
 }
 
 function updateTimerDisplay() {
+  // 防呆：萬一有 interval 在 startTime 已經被清成 null 之後還在跑（例如孤兒 interval），
+  // 直接停止更新，不要把 new Date() - null 這種算出來的巨大亂數字塞進畫面。
+  if (!startTime) {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    return;
+  }
   const elapsed = Math.floor((new Date() - startTime) / 1000);
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
