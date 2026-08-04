@@ -133,6 +133,20 @@ header {
   font-size: 0.9rem;
 }
 
+.target-row { margin-bottom: 28px; }
+.target-row input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+.target-row input::placeholder { color: var(--muted); }
+.target-row input:focus { outline: none; border-color: var(--accent); }
+
 /* ── Circle Timer ── */
 .circle-timer {
   position: relative;

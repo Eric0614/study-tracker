@@ -3,6 +3,7 @@ let isRunning = false;
 let startTime = null;
 let timerInterval = null;
 let currentSubject = '';
+let currentTargetMinutes = null;  // 這次計時的目標分鐘數，選填、每次現場輸入
 let currentReportType = 'day';
 let subjects = [];
 let allRecords = [];
@@ -124,19 +125,31 @@ function startTickingInterval() {
   timerInterval = setInterval(updateTimerDisplay, 1000);
 }
 
+function readTargetMinutesInput() {
+  const input = document.getElementById('target-minutes-input');
+  const val = parseInt(input.value, 10);
+  return (input.value.trim() !== '' && isFinite(val) && val > 0) ? val : null;
+}
+
 function startTimer() {
   const select = document.getElementById('subject-select');
   if (!select.value) { showToast('請先選擇科目'); return; }
   currentSubject = select.value;
+  currentTargetMinutes = readTargetMinutesInput();
   startTime = new Date();
   isRunning = true;
   document.getElementById('timer-subject-label').textContent = currentSubject;
   document.getElementById('main-btn').innerHTML = '⏹&nbsp; 停止';
   document.getElementById('main-btn').className = 'timer-btn stop';
   document.getElementById('subject-select').disabled = true;
+  document.getElementById('target-minutes-input').disabled = true;
   document.getElementById('circle-timer').classList.add('running');
   startTickingInterval();
-  localStorage.setItem(TIMER_STATE_KEY, JSON.stringify({ subject: currentSubject, startTime: startTime.toISOString() }));
+  localStorage.setItem(TIMER_STATE_KEY, JSON.stringify({
+    subject: currentSubject,
+    startTime: startTime.toISOString(),
+    targetMinutes: currentTargetMinutes
+  }));
 }
 
 // 手機切到背景 App 一段時間後，瀏覽器常會把分頁丟棄，回來時等於重新載入頁面、
@@ -157,11 +170,15 @@ function restoreTimerState() {
     return;
   }
   currentSubject = saved.subject;
+  currentTargetMinutes = (typeof saved.targetMinutes === 'number' && saved.targetMinutes > 0) ? saved.targetMinutes : null;
   startTime = savedStart;
   isRunning = true;
   const select = document.getElementById('subject-select');
   select.value = currentSubject;
   select.disabled = true;
+  const targetInput = document.getElementById('target-minutes-input');
+  targetInput.value = currentTargetMinutes === null ? '' : currentTargetMinutes;
+  targetInput.disabled = true;
   document.getElementById('timer-subject-label').textContent = currentSubject;
   document.getElementById('main-btn').innerHTML = '⏹&nbsp; 停止';
   document.getElementById('main-btn').className = 'timer-btn stop';
@@ -181,17 +198,21 @@ async function stopTimer() {
   if (durationMin < 1) {
     showToast('計時不足 1 分鐘，不記錄');
   } else {
-    await saveRecord(currentSubject, startTime, endTime, durationMin);
+    await saveRecord(currentSubject, startTime, endTime, durationMin, currentTargetMinutes);
   }
   document.getElementById('timer-display').textContent = '00:00:00';
   document.getElementById('timer-subject-label').textContent = '選擇科目開始';
   document.getElementById('main-btn').innerHTML = '▶&nbsp; 開始唸書';
   document.getElementById('main-btn').className = 'timer-btn start';
   document.getElementById('subject-select').disabled = false;
+  const targetInput = document.getElementById('target-minutes-input');
+  targetInput.disabled = false;
+  targetInput.value = '';
   document.getElementById('circle-timer').classList.remove('running');
   document.getElementById('circle-progress').style.strokeDashoffset = 565;
   startTime = null;
   currentSubject = '';
+  currentTargetMinutes = null;
 }
 
 function updateTimerDisplay() {
@@ -298,7 +319,7 @@ async function deleteSubject(index) {
 }
 
 // ── Records ──────────────────────────────────────
-async function saveRecord(subject, start, end, durationMin) {
+async function saveRecord(subject, start, end, durationMin, targetMinutes) {
   showToast('儲存中...');
   try {
     const result = await apiWriteWithRetry('addRecord', 'data', {
@@ -308,6 +329,7 @@ async function saveRecord(subject, start, end, durationMin) {
       end: formatTime(end),
       duration: durationMin,
       date: formatDate(start),
+      targetMinutes,
     });
     showToast(`✅ 已記錄：${subject} ${durationMin} 分鐘`);
     // 直接用後端回傳、已經確認寫入成功的那筆紀錄更新畫面，不要再另外發一次
@@ -318,6 +340,7 @@ async function saveRecord(subject, start, end, durationMin) {
       ...result.record,
       duration: Number(result.record.duration) || 0,
       date: String(result.record.date),
+      targetMinutes: (typeof result.record.targetMinutes === 'number') ? result.record.targetMinutes : null,
     });
     localStorage.setItem(recordsCacheKey(), JSON.stringify(allRecords));
     renderTodayList();
@@ -339,6 +362,7 @@ async function loadAllRecords() {
       ...r,
       duration: Number(r.duration) || 0,
       date: String(r.date),
+      targetMinutes: (typeof r.targetMinutes === 'number') ? r.targetMinutes : null,
     }));
     localStorage.setItem(recordsCacheKey(), JSON.stringify(allRecords));
   } catch (e) {
@@ -382,12 +406,14 @@ function renderTodayList() {
   list.innerHTML = '';
   sorted.forEach(r => {
     const li = document.createElement('li');
+    const percent = computeTargetPercent(r.duration, r.targetMinutes);
+    const durationLabel = percent === null ? formatDuration(r.duration) : `${formatDuration(r.duration)}（${percent}%）`;
     li.innerHTML = `
       <span class="subj-left">
         <span class="subj-dot" style="background:${subjectColors[r.subject]}"></span>
         <span class="subj-name">${r.subject}<span class="session-range">${formatSessionRange(r)}</span></span>
       </span>
-      <span class="subj-duration">${formatDuration(r.duration)}</span>`;
+      <span class="subj-duration">${durationLabel}</span>`;
     list.appendChild(li);
   });
 }

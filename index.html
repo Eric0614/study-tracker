@@ -31,6 +31,10 @@
       </select>
     </div>
 
+    <div class="target-row">
+      <input type="number" id="target-minutes-input" placeholder="目標分鐘（選填）" min="1" step="1">
+    </div>
+
     <div class="circle-timer" id="circle-timer">
       <svg viewBox="0 0 200 200">
         <circle class="circle-bg" cx="100" cy="100" r="90"/>
@@ -59,7 +63,7 @@
 <div id="page-report" class="page">
   <p class="total-summary" id="report-total-summary">載入中...</p>
   <div class="report-tabs">
-    <button class="report-tab active" onclick="switchReport('day', this)">每日</button>
+    <button class="report-tab active" onclick="switchReport('day', this)">今日</button>
     <button class="report-tab" onclick="switchReport('week', this)">本週</button>
     <button class="report-tab" onclick="switchReport('month', this)">本月</button>
   </div>

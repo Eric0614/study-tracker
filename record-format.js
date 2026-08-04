@@ -16,8 +16,14 @@
     return records.reduce(function (sum, r) { return sum + r.duration; }, 0);
   }
 
+  function computeTargetPercent(durationMinutes, targetMinutes) {
+    if (!targetMinutes) return null;
+    return Math.round(durationMinutes / targetMinutes * 100);
+  }
+
   return {
     formatSessionRange: formatSessionRange,
-    computeTotalMinutes: computeTotalMinutes
+    computeTotalMinutes: computeTotalMinutes,
+    computeTargetPercent: computeTargetPercent
   };
 });
