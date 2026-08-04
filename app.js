@@ -546,9 +546,9 @@ function renderReportTable(records, groupMode) {
     html += `<table class="report-table"><thead><tr><th>科目</th><th style="text-align:right">累積時數</th><th style="text-align:right">佔比</th></tr></thead><tbody>`;
     Object.entries(bySubject).sort((a,b)=>b[1]-a[1]).forEach(([subj,mins]) => {
       const pct = totalMin > 0 ? Math.round(mins/totalMin*100) : 0;
-      html += `<tr><td>${subj}</td><td class="hours">${formatDuration(mins)}</td><td class="hours" style="color:#8a93a6">${pct}%</td></tr>`;
+      html += `<tr><td>${subj}</td><td class="hours">${formatDuration(mins)}</td><td class="hours" style="color:var(--muted)">${pct}%</td></tr>`;
     });
-    html += `<tr style="font-weight:700;border-top:2px solid #e4e8f0"><td>總計</td><td class="hours">${formatDuration(totalMin)}</td><td class="hours" style="color:#8a93a6">100%</td></tr>`;
+    html += `<tr style="font-weight:700;border-top:2px solid var(--border)"><td>總計</td><td class="hours">${formatDuration(totalMin)}</td><td class="hours" style="color:var(--muted)">100%</td></tr>`;
     html += '</tbody></table>';
   }
   container.innerHTML = html;

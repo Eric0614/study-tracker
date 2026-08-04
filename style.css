@@ -1,18 +1,18 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0f172a;
-  --surface: #1e293b;
-  --surface2: #273449;
-  --border: #334155;
-  --text: #f1f5f9;
-  --muted: #94a3b8;
-  --accent: #a78bfa;
-  --accent2: #7c3aed;
-  --accent-glow: rgba(167,139,250,0.25);
+  --bg: #F8F9F6;
+  --surface: #FFFFFF;
+  --surface2: #EEF3F6;
+  --border: #D6E2EA;
+  --text: #1B3358;
+  --muted: #4E6A85;
+  --accent: #63B7D6;
+  --accent2: #2E5FA8;
+  --accent-glow: rgba(46,95,168,0.22);
   --success: #34d399;
-  --danger: #f87171;
-  --gold: #fbbf24;
+  --danger: #96502F;
+  --gold: #856131;
 }
 
 body {
@@ -147,19 +147,19 @@ header {
 
 .circle-bg {
   fill: none;
-  stroke: #334155;
+  stroke: var(--border);
   stroke-width: 10;
 }
 
 .circle-progress {
   fill: none;
-  stroke: #a78bfa;
+  stroke: var(--accent2);
   stroke-width: 10;
   stroke-linecap: round;
   stroke-dasharray: 565;
   stroke-dashoffset: 565;
   transition: stroke-dashoffset 1s linear;
-  filter: drop-shadow(0 0 6px rgba(167,139,250,0.6));
+  filter: drop-shadow(0 0 6px rgba(46,95,168,0.45));
 }
 
 .circle-inner {
@@ -213,9 +213,9 @@ header {
 .timer-btn.start:hover { transform: translateY(-1px); box-shadow: 0 6px 28px var(--accent-glow); }
 
 .timer-btn.stop {
-  background: linear-gradient(135deg, #f87171, #dc2626);
+  background: linear-gradient(135deg, #96502F, #7A3F25);
   color: white;
-  box-shadow: 0 4px 20px rgba(248,113,113,0.3);
+  box-shadow: 0 4px 20px rgba(150,80,47,0.3);
 }
 .timer-btn.stop:hover { transform: translateY(-1px); }
 
