@@ -1,6 +1,15 @@
 var SUBJECT_SHEET_NAME = '科目清單';
 var RECORD_SHEET_NAME = '唸書記錄';
 
+/*
+ * 綁定的試算表 ID（來自試算表網址 /d/ 與 /edit 之間那段）。
+ * 用 openById 而非 getActiveSpreadsheet，是因為 getActiveSpreadsheet
+ * 在匿名／未登入呼叫 Web App 時需要額外解析「作用中」的執行環境，
+ * 社群回報這一步偶爾與 exec 網址間歇性回傳 Google 雲端硬碟 404 錯誤頁有關；
+ * openById 是明確查找，不需要那層解析。
+ */
+var SPREADSHEET_ID = '19IWf-xZ-2YfIr5cC80qbwe3l-EaNieeIQAqCpbDCkK0';
+
 var DEFAULT_SUBJECTS = [
   '國文',
   '英文',
@@ -264,18 +273,16 @@ function parseJson(value, name) {
 }
 
 /**
- * 取得目前綁定的 Google 試算表。
+ * 取得綁定的 Google 試算表。
  *
- * 此 Apps Script 必須從目標試算表的：
- * 擴充功能 → Apps Script
- * 建立或開啟。
+ * 用固定的 SPREADSHEET_ID 明確查找，不依賴「作用中」的執行環境解析。
  */
 function getSpreadsheet() {
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
 
   if (!spreadsheet) {
     throw new Error(
-      '找不到綁定的試算表。請確認程式是從目標試算表的「擴充功能 → Apps Script」建立。'
+      '找不到 SPREADSHEET_ID 對應的試算表，請確認 ID 是否正確。'
     );
   }
 
