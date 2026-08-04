@@ -46,6 +46,19 @@ async function apiWrite(action, paramKey, data) {
   return result;
 }
 
+// 跟 apiGetWithRetry 同一個原因：exec 網址偶爾回傳非 JSON 的 404 錯誤頁，
+// 寫入（存記錄／科目／週目標）失敗代表資料真的沒存到，比讀取失敗更嚴重，
+// 同樣重試一次再放棄。
+async function apiWriteWithRetry(action, paramKey, data, retries = 1, delayMs = 500) {
+  try {
+    return await apiWrite(action, paramKey, data);
+  } catch (e) {
+    if (retries <= 0) throw e;
+    await new Promise(r => setTimeout(r, delayMs));
+    return apiWriteWithRetry(action, paramKey, data, retries - 1, delayMs);
+  }
+}
+
 // ── Init ────────────────────────────────────────
 window.addEventListener('load', async () => {
   checkUserName();
@@ -236,9 +249,17 @@ async function addSubject() {
   const name = input.value.trim();
   if (!name) { showToast('請輸入科目名稱'); return; }
   if (subjects.includes(name)) { showToast('科目已存在'); return; }
+  const previousSubjects = subjects.slice();
   subjects.push(name);
+  try {
+    await apiWriteWithRetry('saveSubjects', 'subjects', subjects);
+  } catch (e) {
+    subjects = previousSubjects;
+    showToast('❌ 新增失敗，請重試');
+    console.error(e);
+    return;
+  }
   input.value = '';
-  await apiWrite('saveSubjects', 'subjects', subjects);
   renderSubjectSelect();
   renderSubjectChips();
   showToast('✅ 已新增：' + name);
@@ -247,8 +268,16 @@ async function addSubject() {
 async function deleteSubject(index) {
   if (!confirm(`確定要刪除「${subjects[index]}」嗎？`)) return;
   const name = subjects[index];
+  const previousSubjects = subjects.slice();
   subjects.splice(index, 1);
-  await apiWrite('saveSubjects', 'subjects', subjects);
+  try {
+    await apiWriteWithRetry('saveSubjects', 'subjects', subjects);
+  } catch (e) {
+    subjects = previousSubjects;
+    showToast('❌ 刪除失敗，請重試');
+    console.error(e);
+    return;
+  }
   renderSubjectSelect();
   renderSubjectChips();
   showToast('已刪除：' + name);
@@ -258,7 +287,7 @@ async function deleteSubject(index) {
 async function saveRecord(subject, start, end, durationMin) {
   showToast('儲存中...');
   try {
-    await apiWrite('addRecord', 'data', {
+    await apiWriteWithRetry('addRecord', 'data', {
       user: getUserName(),
       subject,
       start: formatTime(start),
@@ -459,7 +488,7 @@ async function handleSaveWeeklyGoal() {
   const btn = document.getElementById('goal-save-btn');
   btn.disabled = true;
   try {
-    const result = await apiWrite('saveWeeklyGoal', 'data', {
+    const result = await apiWriteWithRetry('saveWeeklyGoal', 'data', {
       user: getUserName(),
       goalMinutes: Math.round(hours * 60),
     });
