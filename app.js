@@ -10,12 +10,27 @@ let weeklyGoalMinutes = null;   // null = 尚未設定（或尚未載入）
 let weeklyGoalLoaded = false;   // 是否已完成第一次向後端取值
 let weekActualMinutes = 0;      // 本週累積分鐘，與週報表使用同一份資料計算
 
+const TIMER_STATE_KEY = 'study_timer_state';
+const SUBJECTS_CACHE_KEY = 'study_subjects_cache';
+
 // ── API ─────────────────────────────────────────
 async function apiGet(params) {
   const url = new URL(CONFIG.SCRIPT_URL);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
   const resp = await fetch(url.toString());
   return resp.json();
+}
+
+// Apps Script 的 exec 網址偶爾會回傳 Google 雲端硬碟的 404 錯誤頁（非 JSON），
+// 屬短暫性問題，重試一次通常就會拿到正確結果。
+async function apiGetWithRetry(params, retries = 1, delayMs = 500) {
+  try {
+    return await apiGet(params);
+  } catch (e) {
+    if (retries <= 0) throw e;
+    await new Promise(r => setTimeout(r, delayMs));
+    return apiGetWithRetry(params, retries - 1, delayMs);
+  }
 }
 
 async function apiWrite(action, paramKey, data) {
@@ -36,6 +51,7 @@ window.addEventListener('load', async () => {
   checkUserName();
   await loadSubjects();
   await loadTodayRecords();
+  restoreTimerState();
 });
 
 // ── User Name ───────────────────────────────────
@@ -100,12 +116,45 @@ function startTimer() {
   document.getElementById('subject-select').disabled = true;
   document.getElementById('circle-timer').classList.add('running');
   timerInterval = setInterval(updateTimerDisplay, 1000);
+  localStorage.setItem(TIMER_STATE_KEY, JSON.stringify({ subject: currentSubject, startTime: startTime.toISOString() }));
+}
+
+// 手機切到背景 App 一段時間後，瀏覽器常會把分頁丟棄，回來時等於重新載入頁面、
+// 記憶體中的計時狀態全部歸零。用 localStorage 記住計時中的狀態，載入時偵測到就自動接續。
+function restoreTimerState() {
+  const raw = localStorage.getItem(TIMER_STATE_KEY);
+  if (!raw) return;
+  let saved;
+  try {
+    saved = JSON.parse(raw);
+  } catch (e) {
+    localStorage.removeItem(TIMER_STATE_KEY);
+    return;
+  }
+  const savedStart = new Date(saved.startTime);
+  if (!saved.subject || isNaN(savedStart.getTime())) {
+    localStorage.removeItem(TIMER_STATE_KEY);
+    return;
+  }
+  currentSubject = saved.subject;
+  startTime = savedStart;
+  isRunning = true;
+  const select = document.getElementById('subject-select');
+  select.value = currentSubject;
+  select.disabled = true;
+  document.getElementById('timer-subject-label').textContent = currentSubject;
+  document.getElementById('main-btn').innerHTML = '⏹&nbsp; 停止';
+  document.getElementById('main-btn').className = 'timer-btn stop';
+  document.getElementById('circle-timer').classList.add('running');
+  updateTimerDisplay();
+  timerInterval = setInterval(updateTimerDisplay, 1000);
 }
 
 async function stopTimer() {
   if (!isRunning) return;
   clearInterval(timerInterval);
   isRunning = false;
+  localStorage.removeItem(TIMER_STATE_KEY);
   const endTime = new Date();
   const durationMin = Math.round((endTime - startTime) / 60000);
   if (durationMin < 1) {
@@ -141,10 +190,14 @@ function updateTimerDisplay() {
 // ── Subjects ─────────────────────────────────────
 async function loadSubjects() {
   try {
-    const data = await apiGet({ action: 'getSubjects' });
+    const data = await apiGetWithRetry({ action: 'getSubjects' });
     subjects = data.subjects || [];
+    localStorage.setItem(SUBJECTS_CACHE_KEY, JSON.stringify(subjects));
   } catch (e) {
-    subjects = ['國文','英文','數學','自然','社會'];
+    // API 連重試都失敗時，優先用「上次成功拿到的清單」，而不是硬寫死的預設 5 科，
+    // 避免把使用者實際輸入的科目清單誤蓋成看起來正常、實際是錯的資料。
+    const cached = localStorage.getItem(SUBJECTS_CACHE_KEY);
+    subjects = cached ? JSON.parse(cached) : ['國文','英文','數學','自然','社會'];
   }
   renderSubjectSelect();
   renderSubjectChips();
@@ -221,16 +274,24 @@ async function saveRecord(subject, start, end, durationMin) {
   }
 }
 
+function recordsCacheKey() {
+  return 'study_records_cache_' + getUserName();
+}
+
 async function loadAllRecords() {
   try {
-    const data = await apiGet({ action: 'getRecords', user: getUserName() });
+    const data = await apiGetWithRetry({ action: 'getRecords', user: getUserName() });
     allRecords = (data.records || []).map(r => ({
       ...r,
       duration: Number(r.duration) || 0,
       date: String(r.date),
     }));
+    localStorage.setItem(recordsCacheKey(), JSON.stringify(allRecords));
   } catch (e) {
-    allRecords = [];
+    // 同一個 Apps Script 間歇性 404 問題會讓「今天的記錄」看起來像被清空，
+    // 改用快取而不是空陣列，避免使用者誤以為記錄真的不見了。
+    const cached = localStorage.getItem(recordsCacheKey());
+    allRecords = cached ? JSON.parse(cached) : [];
   }
 }
 
