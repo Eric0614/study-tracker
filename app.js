@@ -293,29 +293,43 @@ async function loadAllRecords() {
     const cached = localStorage.getItem(recordsCacheKey());
     allRecords = cached ? JSON.parse(cached) : [];
   }
+  updateTotalSummary();
+}
+
+function updateTotalSummary() {
+  const text = '🎯 總共已讀書 ' + '<span class="total-value">' + formatDuration(computeTotalMinutes(allRecords)) + '</span>';
+  const timerEl = document.getElementById('timer-total-summary');
+  if (timerEl) timerEl.innerHTML = text;
+  const reportEl = document.getElementById('report-total-summary');
+  if (reportEl) reportEl.innerHTML = text;
 }
 
 async function loadTodayRecords() {
   await loadAllRecords();
   const today = formatDate(new Date());
   const todayRecords = allRecords.filter(r => r.date === today);
-  const bySubject = {};
-  todayRecords.forEach(r => { bySubject[r.subject] = (bySubject[r.subject] || 0) + r.duration; });
   const list = document.getElementById('today-list');
-  if (Object.keys(bySubject).length === 0) {
+  if (todayRecords.length === 0) {
     list.innerHTML = '<li class="empty-msg">今天還沒有記錄</li>';
     return;
   }
   const colors = ['#a78bfa','#34d399','#fbbf24','#f87171','#60a5fa','#f472b6','#4ade80'];
+  const subjectColors = {};
+  todayRecords.forEach(r => {
+    if (!(r.subject in subjectColors)) {
+      subjectColors[r.subject] = colors[Object.keys(subjectColors).length % colors.length];
+    }
+  });
+  const sorted = todayRecords.slice().sort((a, b) => b.start.localeCompare(a.start));
   list.innerHTML = '';
-  Object.entries(bySubject).sort((a,b) => b[1]-a[1]).forEach(([subj, mins], i) => {
+  sorted.forEach(r => {
     const li = document.createElement('li');
     li.innerHTML = `
       <span class="subj-left">
-        <span class="subj-dot" style="background:${colors[i % colors.length]}"></span>
-        <span class="subj-name">${subj}</span>
+        <span class="subj-dot" style="background:${subjectColors[r.subject]}"></span>
+        <span class="subj-name">${r.subject}<span class="session-range">${formatSessionRange(r)}</span></span>
       </span>
-      <span class="subj-duration">${formatDuration(mins)}</span>`;
+      <span class="subj-duration">${formatDuration(r.duration)}</span>`;
     list.appendChild(li);
   });
 }
@@ -480,13 +494,13 @@ function renderReportTable(records, groupMode) {
   if (groupMode === 'date') {
     const byDate = {};
     records.forEach(r => {
-      if (!byDate[r.date]) byDate[r.date] = {};
-      byDate[r.date][r.subject] = (byDate[r.date][r.subject]||0) + r.duration;
+      if (!byDate[r.date]) byDate[r.date] = [];
+      byDate[r.date].push(r);
     });
-    html += `<table class="report-table"><thead><tr><th>日期</th><th>科目</th><th style="text-align:right">時數</th></tr></thead><tbody>`;
+    html += `<table class="report-table"><thead><tr><th>日期</th><th>科目</th><th>時間</th><th style="text-align:right">時數</th></tr></thead><tbody>`;
     Object.keys(byDate).sort().reverse().forEach(date => {
-      Object.entries(byDate[date]).sort((a,b)=>b[1]-a[1]).forEach(([subj,mins]) => {
-        html += `<tr><td class="date-cell">${date}</td><td>${subj}</td><td class="hours">${formatDuration(mins)}</td></tr>`;
+      byDate[date].slice().sort((a,b) => b.start.localeCompare(a.start)).forEach(r => {
+        html += `<tr><td class="date-cell">${date}</td><td>${r.subject}</td><td class="session-time">${r.start} → ${r.end}</td><td class="hours">${formatDuration(r.duration)}</td></tr>`;
       });
     });
     html += '</tbody></table>';

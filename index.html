@@ -45,6 +45,8 @@
     <button class="timer-btn start" id="main-btn" onclick="toggleTimer()">▶&nbsp; 開始唸書</button>
   </div>
 
+  <p class="total-summary" id="timer-total-summary">載入中...</p>
+
   <p class="section-title">今日記錄</p>
   <div class="today-card">
     <ul class="today-list" id="today-list">
@@ -55,6 +57,7 @@
 
 <!-- Report Page -->
 <div id="page-report" class="page">
+  <p class="total-summary" id="report-total-summary">載入中...</p>
   <div class="report-tabs">
     <button class="report-tab active" onclick="switchReport('day', this)">每日</button>
     <button class="report-tab" onclick="switchReport('week', this)">本週</button>
@@ -97,6 +100,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="config.js"></script>
+<script src="record-format.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
