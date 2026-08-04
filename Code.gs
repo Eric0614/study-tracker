@@ -18,14 +18,24 @@ var DEFAULT_SUBJECTS = [
   '社會'
 ];
 
+/*
+ * 「目標分鐘」放在最後一欄（而不是插進中間），是為了不用動到既有資料列的欄位順序，
+ * 舊紀錄這一欄自然是空字串，前端會當成「這筆沒有設定目標」處理，不需要遷移舊資料。
+ */
 var RECORD_HEADERS = [
   '使用者',
   '科目',
   '開始時間',
   '結束時間',
   '持續分鐘',
-  '日期'
+  '日期',
+  '目標分鐘'
 ];
+
+/*
+ * 單次讀書目標分鐘數上限：24 小時。
+ */
+var SESSION_TARGET_MAX_MINUTES = 1440;
 
 /*
  * 每週目標時數（分鐘）上限：7 天 * 24 小時 * 60 分鐘。
@@ -450,7 +460,8 @@ function addRecord(data) {
       record.start,
       record.end,
       record.duration,
-      record.date
+      record.date,
+      record.targetMinutes === null ? '' : record.targetMinutes
     ]);
 
     /*
@@ -491,7 +502,7 @@ function getRecords(user) {
 
   var rowCount = sheet.getLastRow() - 1;
   var rows = sheet
-    .getRange(2, 1, rowCount, 6)
+    .getRange(2, 1, rowCount, 7)
     .getValues();
 
   var records = [];
@@ -507,13 +518,18 @@ function getRecords(user) {
       continue;
     }
 
+    var rawTargetMinutes = rows[i][6];
+
     records.push({
       user: rowUser,
       subject: subject,
       start: formatTime(rows[i][2]),
       end: formatTime(rows[i][3]),
       duration: toNumber(rows[i][4]),
-      date: formatDate(rows[i][5])
+      date: formatDate(rows[i][5]),
+      targetMinutes: rawTargetMinutes === '' || rawTargetMinutes === null
+        ? null
+        : toNumber(rawTargetMinutes)
     });
   }
 
@@ -636,6 +652,7 @@ function validateRecord(data) {
   var end = normalizeTime(data.end);
   var date = normalizeDate(data.date);
   var duration = Math.round(Number(data.duration));
+  var targetMinutes = normalizeTargetMinutes(data.targetMinutes);
 
   if (!user) {
     throw new Error('使用者名稱不能為空');
@@ -685,13 +702,29 @@ function validateRecord(data) {
     );
   }
 
+  if (targetMinutes === 'invalid') {
+    throw new Error(
+      '目標分鐘數必須是正整數，收到：' +
+      String(data.targetMinutes)
+    );
+  }
+
+  if (targetMinutes !== null && targetMinutes > SESSION_TARGET_MAX_MINUTES) {
+    throw new Error(
+      '目標分鐘數不能超過 ' +
+      SESSION_TARGET_MAX_MINUTES +
+      ' 分鐘（24 小時）'
+    );
+  }
+
   return {
     user: user,
     subject: subject,
     start: start,
     end: end,
     duration: duration,
-    date: date
+    date: date,
+    targetMinutes: targetMinutes === 'invalid' ? null : targetMinutes
   };
 }
 
@@ -747,6 +780,18 @@ function ensureRecordHeader(sheet) {
     sheet
       .getRange(1, 1, 1, RECORD_HEADERS.length)
       .setValues([RECORD_HEADERS]);
+    return;
+  }
+
+  /*
+   * 舊試算表可能是「目標分鐘」這個欄位還不存在之前建的，
+   * 標題列已經有內容、不會走上面 isEmpty 那條路。只補上缺的
+   * 標題文字（例如 G1 的「目標分鐘」），不動其他已存在的欄位。
+   */
+  for (var j = 0; j < RECORD_HEADERS.length; j++) {
+    if (!normalizeText(currentHeaders[j])) {
+      sheet.getRange(1, j + 1).setValue(RECORD_HEADERS[j]);
+    }
   }
 }
 
@@ -852,6 +897,26 @@ function normalizeDate(value) {
     '-' +
     padTwoDigits(day)
   );
+}
+
+/**
+ * 標準化前端傳入的單次讀書目標分鐘數。
+ *
+ * 這是選填欄位：沒填（null/undefined/空字串）回傳 null，
+ * 填了但不是正整數回傳字串 'invalid' 讓呼叫端丟出驗證錯誤。
+ */
+function normalizeTargetMinutes(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  var num = Math.round(Number(value));
+
+  if (!isFinite(num) || num <= 0) {
+    return 'invalid';
+  }
+
+  return num;
 }
 
 /**
