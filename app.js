@@ -125,15 +125,27 @@ function startTickingInterval() {
   timerInterval = setInterval(updateTimerDisplay, 1000);
 }
 
+// 對齊後端 Code.gs 的 SESSION_TARGET_MAX_MINUTES 上限，避免停止計時時才被後端拒絕、
+// 導致 stopTimer 已清空計時狀態但這次記錄整個遺失且無法重試。
+const TARGET_MINUTES_MAX = 1440;
+
 function readTargetMinutesInput() {
   const input = document.getElementById('target-minutes-input');
-  const val = parseInt(input.value, 10);
-  return (input.value.trim() !== '' && isFinite(val) && val > 0) ? val : null;
+  const val = Number(input.value);
+  return (input.value.trim() !== '' && Number.isInteger(val) && val > 0 && val <= TARGET_MINUTES_MAX) ? val : null;
 }
 
 function startTimer() {
   const select = document.getElementById('subject-select');
   if (!select.value) { showToast('請先選擇科目'); return; }
+  const targetRaw = document.getElementById('target-minutes-input').value.trim();
+  if (targetRaw !== '') {
+    const targetVal = Number(targetRaw);
+    if (!Number.isInteger(targetVal) || targetVal <= 0 || targetVal > TARGET_MINUTES_MAX) {
+      showToast(`目標分鐘需介於 1–${TARGET_MINUTES_MAX} 之間`);
+      return;
+    }
+  }
   currentSubject = select.value;
   currentTargetMinutes = readTargetMinutesInput();
   startTime = new Date();
@@ -434,10 +446,8 @@ async function loadReport(type) {
 
   let filtered = [];
   if (type === 'day') {
-    const days = Array.from({length:7}, (_,i) => {
-      const d = new Date(now); d.setDate(d.getDate()-i); return formatDate(d);
-    });
-    filtered = allRecords.filter(r => days.includes(r.date));
+    const today = formatDate(now);
+    filtered = allRecords.filter(r => r.date === today);
     renderReportTable(filtered, 'date');
   } else if (type === 'week') {
     const weekStart = getWeekStart(now);
