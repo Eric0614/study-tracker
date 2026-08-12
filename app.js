@@ -1,5 +1,6 @@
 // ── State ──────────────────────────────────────
 let isRunning = false;
+let isSaving = false;
 let startTime = null;
 let timerInterval = null;
 let currentSubject = '';
@@ -64,8 +65,8 @@ async function apiWriteWithRetry(action, paramKey, data, retries = 1, delayMs = 
 window.addEventListener('load', async () => {
   checkUserName();
   await loadSubjects();
-  await loadTodayRecords();
   restoreTimerState();
+  await loadTodayRecords();
 });
 
 // ── User Name ───────────────────────────────────
@@ -150,6 +151,7 @@ function startTimer() {
   currentTargetMinutes = readTargetMinutesInput();
   startTime = new Date();
   isRunning = true;
+  persistTimerState({ isRunning: true, currentSubject, startTime });
   document.getElementById('timer-subject-label').textContent = currentSubject;
   document.getElementById('main-btn').innerHTML = '⏹&nbsp; 停止';
   document.getElementById('main-btn').className = 'timer-btn stop';
@@ -201,30 +203,45 @@ function restoreTimerState() {
 
 async function stopTimer() {
   if (!isRunning) return;
+  if (isSaving) return;
+  isSaving = true;
   clearInterval(timerInterval);
   timerInterval = null;
   isRunning = false;
-  localStorage.removeItem(TIMER_STATE_KEY);
+  // 立即 disable 按鈕，防止使用者重複點擊
+  const btn = document.getElementById('main-btn');
+  btn.innerHTML = '⏹&nbsp; 儲存中...';
+  btn.disabled = true;
   const endTime = new Date();
   const durationMin = Math.round((endTime - startTime) / 60000);
-  if (durationMin < 1) {
-    showToast('計時不足 1 分鐘，不記錄');
-  } else {
-    await saveRecord(currentSubject, startTime, endTime, durationMin, currentTargetMinutes);
-  }
-  document.getElementById('timer-display').textContent = '00:00:00';
-  document.getElementById('timer-subject-label').textContent = '選擇科目開始';
-  document.getElementById('main-btn').innerHTML = '▶&nbsp; 開始唸書';
-  document.getElementById('main-btn').className = 'timer-btn start';
-  document.getElementById('subject-select').disabled = false;
-  const targetInput = document.getElementById('target-minutes-input');
-  targetInput.disabled = false;
-  targetInput.value = '';
-  document.getElementById('circle-timer').classList.remove('running');
-  document.getElementById('circle-progress').style.strokeDashoffset = 565;
+  const subject = currentSubject;
+  const start = startTime;
+  const targetMin = currentTargetMinutes;
+  // 先清狀態，再 await，防止重複儲存
   startTime = null;
   currentSubject = '';
   currentTargetMinutes = null;
+  localStorage.removeItem(TIMER_STATE_KEY);
+  try {
+    if (durationMin < 1) {
+      showToast('計時不足 1 分鐘，不記錄');
+    } else {
+      await saveRecord(subject, start, endTime, durationMin, targetMin);
+    }
+  } finally {
+    isSaving = false;
+    document.getElementById('timer-display').textContent = '00:00:00';
+    document.getElementById('timer-subject-label').textContent = '選擇科目開始';
+    btn.innerHTML = '▶&nbsp; 開始唸書';
+    btn.className = 'timer-btn start';
+    btn.disabled = false;
+    document.getElementById('subject-select').disabled = false;
+    const targetInput = document.getElementById('target-minutes-input');
+    targetInput.disabled = false;
+    targetInput.value = '';
+    document.getElementById('circle-timer').classList.remove('running');
+    document.getElementById('circle-progress').style.strokeDashoffset = 565;
+  }
 }
 
 function updateTimerDisplay() {
