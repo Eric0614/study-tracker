@@ -1,9 +1,9 @@
 // 極簡測試 runner（零依賴，Node.js 執行）
 let passed = 0, failed = 0;
 
-function test(name, fn) {
+async function test(name, fn) {
   try {
-    fn();
+    await fn();
     console.log(`  ✅ ${name}`);
     passed++;
   } catch (e) {
@@ -42,22 +42,35 @@ const localStorage = {
 
 // ── 被測試的純邏輯（從 app.js 提取，不依賴 DOM）──
 
+const TIMER_STATE_KEY = 'study_timer_state';
+
+// 與 app.js startTimer() 相同的寫法
+function writeTimerState(subject, startTime, targetMinutes) {
+  localStorage.setItem(TIMER_STATE_KEY, JSON.stringify({
+    subject,
+    startTime: startTime.toISOString(),
+    targetMinutes,
+  }));
+}
+
+// 與 app.js restoreTimerState() 相同的讀取邏輯（純資料部分，不含 DOM 操作）
+function readTimerState() {
+  const raw = localStorage.getItem(TIMER_STATE_KEY);
+  if (!raw) return null;
+  let saved;
+  try { saved = JSON.parse(raw); } catch (e) { return null; }
+  const savedStart = new Date(saved.startTime);
+  if (!saved.subject || isNaN(savedStart.getTime())) return null;
+  return {
+    subject: saved.subject,
+    startTime: savedStart,
+    targetMinutes: (typeof saved.targetMinutes === 'number' && saved.targetMinutes > 0)
+      ? saved.targetMinutes : null,
+  };
+}
+
 function computeDuration(startTime, endTime) {
   return Math.round((endTime - startTime) / 60000);
-}
-
-function persistTimerState(state) {
-  localStorage.setItem('timer_running', state.isRunning ? '1' : '0');
-  localStorage.setItem('timer_subject', state.currentSubject);
-  localStorage.setItem('timer_start', state.startTime ? state.startTime.toISOString() : '');
-}
-
-function restoreTimerState() {
-  const isRunning = localStorage.getItem('timer_running') === '1';
-  const currentSubject = localStorage.getItem('timer_subject') || '';
-  const raw = localStorage.getItem('timer_start');
-  const startTime = raw ? new Date(raw) : null;
-  return { isRunning, currentSubject, startTime };
 }
 
 // ── isSaving guard（模擬 stopTimer 的核心邏輯）──
@@ -67,10 +80,9 @@ function makeSaveGuard() {
 
   async function stopTimer(isRunning) {
     if (!isRunning) return 'not_running';
-    if (isSaving) return 'already_saving';  // 這行是要實作的
+    if (isSaving) return 'already_saving';
     isSaving = true;
     try {
-      // 模擬 saveRecord 的 async 延遲
       await new Promise(r => setTimeout(r, 50));
       saveCallCount++;
     } finally {
@@ -87,46 +99,63 @@ function makeSaveGuard() {
 // ════════════════════════════════════════════════
 console.log('\nSeam 1: isSaving guard');
 
-test('計時中才能停止，非計時中呼叫是 no-op', async () => {
+await test('計時中才能停止，非計時中呼叫是 no-op', async () => {
   const g = makeSaveGuard();
   const result = await g.stopTimer(false);
   expect(result).toBe('not_running');
   expect(g.getSaveCount()).toBe(0);
 });
 
-test('正常停止一次只 saveRecord 一次', async () => {
+await test('正常停止一次只 saveRecord 一次', async () => {
   const g = makeSaveGuard();
   await g.stopTimer(true);
   expect(g.getSaveCount()).toBe(1);
 });
 
+await test('連續兩次 stopTimer 只觸發一次 save（isSaving guard）', async () => {
+  const g = makeSaveGuard();
+  const [r1, r2] = await Promise.all([g.stopTimer(true), g.stopTimer(true)]);
+  expect(g.getSaveCount()).toBe(1);
+  const results = [r1, r2].sort();
+  expect(results[0]).toBe('already_saving');
+  expect(results[1]).toBe('saved');
+});
+
 // ════════════════════════════════════════════════
-// Seam 2：Timer state persistence
+// Seam 2：Timer state persistence（生產格式）
 // ════════════════════════════════════════════════
-console.log('\nSeam 2: Timer state persistence');
+console.log('\nSeam 2: Timer state persistence (TIMER_STATE_KEY JSON)');
 
-test('persistTimerState 寫入 isRunning=true', () => {
-  persistTimerState({ isRunning: true, currentSubject: '數學', startTime: new Date('2026-07-11T10:00:00') });
-  expect(localStorage.getItem('timer_running')).toBe('1');
+await test('writeTimerState 寫入後 readTimerState 能還原科目', async () => {
+  const t = new Date('2026-08-15T10:00:00Z');
+  writeTimerState('數學', t, null);
+  const state = readTimerState();
+  expect(state.subject).toBe('數學');
 });
 
-test('persistTimerState 寫入 isRunning=false 清空 start', () => {
-  persistTimerState({ isRunning: false, currentSubject: '', startTime: null });
-  expect(localStorage.getItem('timer_running')).toBe('0');
-  expect(localStorage.getItem('timer_start')).toBe('');
-});
-
-test('restoreTimerState 還原科目名稱', () => {
-  persistTimerState({ isRunning: true, currentSubject: '英文', startTime: new Date('2026-07-11T09:30:00') });
-  const state = restoreTimerState();
-  expect(state.currentSubject).toBe('英文');
-});
-
-test('restoreTimerState 還原後 startTime 仍在過去（不是重置成現在）', () => {
-  const past = new Date(Date.now() - 5 * 60 * 1000); // 5 分鐘前
-  persistTimerState({ isRunning: true, currentSubject: '國文', startTime: past });
-  const state = restoreTimerState();
+await test('readTimerState 還原後 startTime 仍在過去（不是重置成現在）', async () => {
+  const past = new Date(Date.now() - 5 * 60 * 1000);
+  writeTimerState('英文', past, null);
+  const state = readTimerState();
   expect(state.startTime.getTime()).toBeLessThan(Date.now());
+});
+
+await test('targetMinutes 正確往返序列化', async () => {
+  writeTimerState('國文', new Date(), 45);
+  const state = readTimerState();
+  expect(state.targetMinutes).toBe(45);
+});
+
+await test('targetMinutes 為 null 時讀回也是 null', async () => {
+  writeTimerState('社會', new Date(), null);
+  const state = readTimerState();
+  expect(state.targetMinutes).toBe(null);
+});
+
+await test('localStorage 清空後 readTimerState 回傳 null', async () => {
+  localStorage.removeItem(TIMER_STATE_KEY);
+  const state = readTimerState();
+  expect(state).toBe(null);
 });
 
 // ════════════════════════════════════════════════
@@ -134,26 +163,18 @@ test('restoreTimerState 還原後 startTime 仍在過去（不是重置成現在
 // ════════════════════════════════════════════════
 console.log('\nSeam 3: computeDuration');
 
-test('剛好 60 秒 → 1 分鐘', () => {
-  const start = new Date(0);
-  const end = new Date(60 * 1000);
-  expect(computeDuration(start, end)).toBe(1);
+await test('剛好 60 秒 → 1 分鐘', async () => {
+  expect(computeDuration(new Date(0), new Date(60 * 1000))).toBe(1);
 });
 
-test('59 秒 → round 成 1 分鐘', () => {
-  const start = new Date(0);
-  const end = new Date(59 * 1000);
-  expect(computeDuration(start, end)).toBe(1);
+await test('59 秒 → round 成 1 分鐘', async () => {
+  expect(computeDuration(new Date(0), new Date(59 * 1000))).toBe(1);
 });
 
-test('29 秒 → round 成 0 分鐘（不記錄）', () => {
-  const start = new Date(0);
-  const end = new Date(29 * 1000);
-  expect(computeDuration(start, end)).toBe(0);
+await test('29 秒 → round 成 0 分鐘（不記錄）', async () => {
+  expect(computeDuration(new Date(0), new Date(29 * 1000))).toBe(0);
 });
 
 // ── 結果 ─────────────────────────────────────────
-setTimeout(() => {
-  console.log(`\n結果：${passed} passed, ${failed} failed\n`);
-  process.exit(failed > 0 ? 1 : 0);
-}, 200);
+console.log(`\n結果：${passed} passed, ${failed} failed\n`);
+process.exit(failed > 0 ? 1 : 0);
