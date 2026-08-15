@@ -151,7 +151,6 @@ function startTimer() {
   currentTargetMinutes = readTargetMinutesInput();
   startTime = new Date();
   isRunning = true;
-  persistTimerState({ isRunning: true, currentSubject, startTime });
   document.getElementById('timer-subject-label').textContent = currentSubject;
   document.getElementById('main-btn').innerHTML = '⏹&nbsp; 停止';
   document.getElementById('main-btn').className = 'timer-btn stop';
